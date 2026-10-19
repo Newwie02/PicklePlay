@@ -1,7 +1,9 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -23,6 +25,13 @@ import { GlassButton } from '../../components/glass/GlassButton';
 import { adminFetchLedger, adminFetchPointTotals, adminFetchUsers, awardPoints } from '../../lib/db';
 import type { PointEntry, User } from '../../lib/types';
 import { glass, palette, type } from '../../theme/glass';
+
+/**
+ * Two RN Modals presented at the same moment are not reliably rendered —
+ * iOS can silently refuse the second one — so the profile sheet and the
+ * award sheet take turns, waiting out each other's fade.
+ */
+const SHEET_SWAP_MS = 260;
 
 export default function OwnerUsersScreen() {
   const [users, setUsers] = useState<User[]>([]);
@@ -75,11 +84,38 @@ export default function OwnerUsersScreen() {
     load(q);
   };
 
+  /** Clears both sheets and brings the next one up after the fade. */
+  const swapSheet = (next: () => void) => {
+    setSelected(null);
+    setAwarding(null);
+    setTimeout(next, SHEET_SWAP_MS);
+  };
+
+  /**
+   * Opens the award form. The profile sheet has to be fully gone before
+   * this one appears, otherwise iOS can refuse to present it at all — which
+   * is exactly how "Award" used to do nothing.
+   */
   const openAward = (u: User) => {
-    setAwarding(u);
     setPtsValue('');
     setPtsReason('');
     setAwardError(null);
+    setAwardSuccess(null);
+    swapSheet(() => setAwarding(u));
+  };
+
+  /** Closes the form and puts the profile sheet back — now holding the
+      freshly re-read totals, so the new number is visible at once. */
+  const closeAward = () => {
+    const u = awarding;
+    setAwardError(null);
+    if (!u) return;
+    swapSheet(() => setSelected(u));
+  };
+
+  /** Backdrop tap / Android back: leave the sheet entirely. */
+  const dismissSheet = () => {
+    swapSheet(() => {});
   };
 
   /** This player's recent hand-outs, newest first. */
@@ -110,15 +146,30 @@ export default function OwnerUsersScreen() {
     }
 
     setAwardError(null);
+    setAwardSuccess(null);
     setSavingAward(true);
     const who = `${awarding.firstName} ${awarding.lastName}`.trim() || 'that player';
     try {
-      const total = await awardPoints(awarding.id, n, ptsReason.trim());
-      setPoints((p) => ({ ...p, [awarding.id]: total }));
+      const returned = await awardPoints(awarding.id, n, ptsReason.trim());
+
+      // Read the totals back instead of trusting the number the RPC handed
+      // over — this is the same rankings view the Ranking tab sums, so the
+      // admin screen and the player's ladder can never show two answers.
+      let now = Number(returned ?? 0);
+      try {
+        const fresh = await adminFetchPointTotals();
+        setPoints(fresh);
+        if (typeof fresh[awarding.id] === 'number') now = fresh[awarding.id];
+        setLedger(await adminFetchLedger());
+      } catch {
+        setPoints((p) => ({ ...p, [awarding.id]: now }));
+      }
+
+      // The confirmation stays inside the sheet — the banner behind the
+      // modal was never visible while this form was open.
       setAwardSuccess(
-        `${n > 0 ? '+' : ''}${n} points for ${who} — now on ${total}. Ranking updated.`
+        `${n > 0 ? '+' : ''}${n} points for ${who} — now on ${now}. The Ranking tab moves too.`
       );
-      setAwarding(null);
       setPtsValue('');
       setPtsReason('');
     } catch (e) {
@@ -317,77 +368,90 @@ export default function OwnerUsersScreen() {
         visible={!!awarding}
         transparent
         animationType="fade"
-        onRequestClose={() => setAwarding(null)}
+        onRequestClose={dismissSheet}
       >
-        <Pressable style={styles.backdrop} onPress={() => setAwarding(null)}>
-          <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-            <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
-            <View style={styles.sheetTint} />
-            <View style={styles.sheetInner}>
-              <View style={styles.grabber} />
-              {awarding ? (
-                <>
-                  <View style={styles.sheetHead}>
-                    <Avatar
-                      avatar={awarding.avatar}
-                      firstName={awarding.firstName}
-                      lastName={awarding.lastName}
-                      size={54}
-                    />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[type.h2, { fontSize: 18 }]}>
-                        {awarding.firstName} {awarding.lastName}
-                      </Text>
-                      <Text style={type.caption}>Currently {points[awarding.id] ?? 0} points</Text>
+        {/* `padding` lifts the sheet clear of the keyboard so the Award
+            button is never buried underneath it, and the ScrollView keeps
+            the form reachable on short screens. */}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.sheetWrap}
+        >
+          <Pressable style={styles.backdrop} onPress={dismissSheet}>
+            <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+              <BlurView intensity={70} tint="dark" style={StyleSheet.absoluteFill} />
+              <View style={styles.sheetTint} />
+              <ScrollView
+                contentContainerStyle={styles.sheetInner}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.grabber} />
+                {awarding ? (
+                  <>
+                    <View style={styles.sheetHead}>
+                      <Avatar
+                        avatar={awarding.avatar}
+                        firstName={awarding.firstName}
+                        lastName={awarding.lastName}
+                        size={54}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[type.h2, { fontSize: 18 }]}>
+                          {awarding.firstName} {awarding.lastName}
+                        </Text>
+                        <Text style={type.caption}>Currently {points[awarding.id] ?? 0} points</Text>
+                      </View>
                     </View>
-                  </View>
 
-                  <View style={{ gap: 14, marginTop: 6 }}>
-                    <GlassInput
-                      label="Points"
-                      placeholder="e.g. 50, or 20 to deduct"
-                      value={ptsValue}
-                      onChangeText={(v) => {
-                        const negative = v.trimStart().startsWith('-');
-                        const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
-                        setPtsValue(negative ? `-${digits}` : digits);
-                        setAwardError(null);
-                      }}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      hint="Whole numbers only · up to 5,000 at a time"
-                    />
-                    <GlassInput
-                      label="Reason (optional)"
-                      placeholder="e.g. October ladder MVP"
-                      value={ptsReason}
-                      onChangeText={setPtsReason}
-                      maxLength={80}
-                    />
-                  </View>
+                    <View style={{ gap: 14, marginTop: 6 }}>
+                      <GlassInput
+                        label="Points"
+                        placeholder="e.g. 50, or 20 to deduct"
+                        value={ptsValue}
+                        onChangeText={(v) => {
+                          const negative = v.trimStart().startsWith('-');
+                          const digits = v.replace(/[^0-9]/g, '').slice(0, 5);
+                          setPtsValue(negative ? `-${digits}` : digits);
+                          setAwardError(null);
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={6}
+                        hint="Whole numbers only · up to 5,000 at a time"
+                      />
+                      <GlassInput
+                        label="Reason (optional)"
+                        placeholder="e.g. October ladder MVP"
+                        value={ptsReason}
+                        onChangeText={setPtsReason}
+                        maxLength={80}
+                      />
+                    </View>
 
-                  <ErrorBanner message={awardError} />
+                    <ErrorBanner message={awardError} />
+                    <SuccessBanner message={awardSuccess} />
 
-                  <View style={styles.awardActions}>
-                    <GlassButton
-                      title="Cancel"
-                      variant="secondary"
-                      onPress={() => setAwarding(null)}
-                      style={{ flex: 1 }}
-                      disabled={savingAward}
-                    />
-                    <GlassButton
-                      title="Award points"
-                      onPress={submitAward}
-                      loading={savingAward}
-                      style={{ flex: 1.4 }}
-                    />
-                  </View>
-                </>
-              ) : null}
-            </View>
+                    <View style={styles.awardActions}>
+                      <GlassButton
+                        title={awardSuccess ? 'Close' : 'Cancel'}
+                        variant="secondary"
+                        onPress={closeAward}
+                        style={{ flex: 1 }}
+                        disabled={savingAward}
+                      />
+                      <GlassButton
+                        title="Award points"
+                        onPress={submitAward}
+                        loading={savingAward}
+                        style={{ flex: 1.4 }}
+                      />
+                    </View>
+                  </>
+                ) : null}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -509,6 +573,7 @@ const styles = StyleSheet.create({
   ledgerDelta: { fontSize: 13, fontWeight: '800', width: 44 },
   ledgerReason: { flex: 1, fontSize: 12.5, color: palette.muted },
   ledgerDate: { fontSize: 11, color: palette.faint },
+  sheetWrap: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { flex: 1, backgroundColor: 'rgba(4,26,18,0.55)', justifyContent: 'flex-end' },
   sheet: {
     borderTopLeftRadius: 28,

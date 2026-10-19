@@ -26,6 +26,10 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="booking/[id]" />
           <Stack.Screen name="tournament/create" />
+          <Stack.Screen name="tournament/[id]" />
+          <Stack.Screen name="tournament/manage" />
+          <Stack.Screen name="tournament/bracket" />
+          <Stack.Screen name="tournament/teams" />
           <Stack.Screen name="owner" />
         </Stack>
       </SignupProvider>

@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type {
   Announcement,
+  BracketRound,
   Booking,
   BookingStatus,
   Court,
@@ -9,7 +10,12 @@ import type {
   PaymentStatus,
   PointEntry,
   RankingRow,
+  StandingRow,
+  TeamMatch,
   Tournament,
+  TournamentMatch,
+  TournamentPlayer,
+  TournamentTeam,
   User,
 } from './types';
 
@@ -544,6 +550,150 @@ export async function createAnnouncement(title: string, body: string): Promise<v
 }
 
 /* ------------------------------------------------------------------ */
+/* TOURNAMENT RESULTS                                                  */
+/* ------------------------------------------------------------------ */
+
+/** A json column can come back as a parsed object or a string. */
+function asRow(v: any): Row | null {
+  if (!v) return null;
+  if (typeof v === 'string') {
+    try {
+      return JSON.parse(v) as Row;
+    } catch {
+      return null;
+    }
+  }
+  return v;
+}
+
+/** Null when the match has no player on that side (or the row was deleted). */
+function mapTournamentPlayer(v: any): TournamentPlayer | null {
+  const r = asRow(v);
+  if (!r || !r.id) return null;
+  return {
+    id: r.id,
+    firstName: r.first_name ?? '',
+    lastName: r.last_name ?? '',
+    avatar: r.avatar ?? null,
+    location: r.location ?? '',
+  };
+}
+
+function mapMatch(r: Row): TournamentMatch {
+  return {
+    id: r.id,
+    tournamentId: r.tournament_id,
+    round: r.round ?? 'Round 1',
+    matchNo: Number(r.match_no ?? 0),
+    home: mapTournamentPlayer(r.home_player),
+    away: mapTournamentPlayer(r.away_player),
+    homeScore: r.home_score ?? null,
+    awayScore: r.away_score ?? null,
+    status: r.status === 'finished' ? 'finished' : 'scheduled',
+    playedAt: r.played_at ?? null,
+  };
+}
+
+export async function fetchTournament(id: string): Promise<Tournament | null> {
+  const { data, error } = await supabase
+    .from('tournaments_with_counts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) fail(error);
+  return data ? mapTournament(data) : null;
+}
+
+export async function fetchTournamentMatches(tournamentId: string): Promise<TournamentMatch[]> {
+  const { data, error } = await supabase
+    .from('tournament_matches_with_players')
+    .select('*')
+    .eq('tournament_id', tournamentId)
+    .order('created_at', { ascending: true })
+    .order('match_no', { ascending: true });
+  if (error) fail(error);
+  return (data ?? []).map(mapMatch);
+}
+
+export async function fetchTournamentStandings(tournamentId: string): Promise<StandingRow[]> {
+  const { data, error } = await supabase
+    .from('tournament_standings')
+    .select('*')
+    .eq('tournament_id', tournamentId)
+    .order('position', { ascending: true });
+  if (error) fail(error);
+  return (data ?? []).map((r: Row) => ({
+    tournamentId: r.tournament_id,
+    position: Number(r.position ?? 0),
+    player: {
+      id: r.user_id,
+      firstName: r.first_name ?? '',
+      lastName: r.last_name ?? '',
+      avatar: r.avatar ?? null,
+      location: r.location ?? '',
+    },
+    played: Number(r.played ?? 0),
+    wins: Number(r.wins ?? 0),
+    pointsFor: Number(r.points_for ?? 0),
+    pointsAgainst: Number(r.points_against ?? 0),
+    pointDiff: Number(r.point_diff ?? 0),
+  }));
+}
+
+/** Profiles for a set of ids — names a tournament's participants. */
+export async function fetchProfilesByIds(ids: string[]): Promise<User[]> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return [];
+  const { data, error } = await supabase.from('profiles').select('*').in('id', unique);
+  if (error) fail(error);
+  return (data ?? []).map(mapUser);
+}
+
+export async function adminAddMatch(input: {
+  tournamentId: string;
+  round: string;
+  homeUserId: string;
+  awayUserId: string;
+}): Promise<void> {
+  const { error } = await supabase.rpc('add_tournament_match', {
+    p_tournament_id: input.tournamentId,
+    p_round: input.round,
+    p_home_user_id: input.homeUserId,
+    p_away_user_id: input.awayUserId,
+  });
+  if (error) fail(error);
+}
+
+export async function adminReportResult(
+  matchId: string,
+  homeScore: number,
+  awayScore: number
+): Promise<void> {
+  const { error } = await supabase.rpc('report_match_result', {
+    p_match_id: matchId,
+    p_home_score: homeScore,
+    p_away_score: awayScore,
+  });
+  if (error) fail(error);
+}
+
+export async function adminRemoveMatch(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_tournament_match', { p_match_id: matchId });
+  if (error) fail(error);
+}
+
+export async function adminSetTournamentStatus(
+  tournamentId: string,
+  status: Tournament['status']
+): Promise<void> {
+  const { error } = await supabase.rpc('set_tournament_status', {
+    p_tournament_id: tournamentId,
+    p_status: status,
+  });
+  if (error) fail(error);
+}
+
+/* ------------------------------------------------------------------ */
 /* RANKING                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -568,4 +718,137 @@ export async function fetchRankings(): Promise<{ rankings: RankingRow[]; myRank:
 
   const idx = rankings.findIndex((r) => r.user.id === uid);
   return { rankings, myRank: idx >= 0 ? idx + 1 : null };
+}
+
+/* ------------------------------------------------------------------ */
+/* DOUBLES TOURNAMENTS — teams, bracket, results (Phase 3)             */
+/* ------------------------------------------------------------------ */
+
+/** Postgres returns snake_case; the screens speak camelCase. */
+function mapTeam(r: Row): TournamentTeam {
+  return {
+    id: r.id,
+    tournamentId: r.tournament_id,
+    seed: r.seed == null ? null : Number(r.seed),
+    player1: r.player1 ? mapTournamentPlayer(r.player1) : null,
+    player2: r.player2 ? mapTournamentPlayer(r.player2) : null,
+  };
+}
+
+function mapTeamMatch(r: Row): TeamMatch {
+  return {
+    id: r.id,
+    tournamentId: r.tournament_id,
+    roundNo: Number(r.round_no ?? 0),
+    roundLabel: r.round_label ?? '',
+    matchNo: Number(r.match_no ?? 0),
+    team1: r.team1?.id ? mapTeam(r.team1) : null,
+    team2: r.team2?.id ? mapTeam(r.team2) : null,
+    winner: r.winner?.id ? mapTeam(r.winner) : null,
+    courtId: r.court_id ?? null,
+    scheduledTime: r.scheduled_time ?? null,
+    team1Score: r.team1_score == null ? null : Number(r.team1_score),
+    team2Score: r.team2_score == null ? null : Number(r.team2_score),
+    resultStatus: (r.result_status ?? 'pending') as TeamMatch['resultStatus'],
+    nextMatchId: r.next_match_id ?? null,
+    nextSlot: r.next_slot ?? null,
+  };
+}
+
+export async function fetchTournamentTeams(tournamentId: string): Promise<TournamentTeam[]> {
+  const { data, error } = await supabase
+    .from('tournament_teams_with_players')
+    .select('*')
+    .eq('tournament_id', tournamentId)
+    .order('seed', { ascending: true, nullsFirst: false });
+  if (error) fail(error);
+  return (data ?? []).map(mapTeam);
+}
+
+export async function fetchTeamMatches(tournamentId: string): Promise<TeamMatch[]> {
+  const { data, error } = await supabase
+    .from('team_matches_with_teams')
+    .select('*')
+    .eq('tournament_id', tournamentId)
+    .order('round_no', { ascending: true })
+    .order('match_no', { ascending: true });
+  if (error) fail(error);
+  return (data ?? []).map(mapTeamMatch);
+}
+
+/** Group a flat match list into the columns a bracket renders. */
+export function toBracket(matches: TeamMatch[]): BracketRound[] {
+  const rounds: BracketRound[] = [];
+  for (const m of matches) {
+    const found = rounds.find((r) => r.label === m.roundLabel);
+    if (found) found.matches.push(m);
+    else rounds.push({ label: m.roundLabel, matches: [m] });
+  }
+  return rounds;
+}
+
+export async function adminRegisterTeam(
+  tournamentId: string,
+  player1Id: string,
+  player2Id: string
+): Promise<void> {
+  const { error } = await supabase.rpc('register_team', {
+    p_tournament_id: tournamentId,
+    p_player1_id: player1Id,
+    p_player2_id: player2Id,
+  });
+  if (error) fail(error);
+}
+
+export async function adminRemoveTeam(teamId: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_team', { p_team_id: teamId });
+  if (error) fail(error);
+}
+
+export async function adminGenerateBracket(tournamentId: string): Promise<void> {
+  const { error } = await supabase.rpc('generate_bracket', {
+    p_tournament_id: tournamentId,
+  });
+  if (error) fail(error);
+}
+
+export async function adminSetMatchCourt(
+  matchId: string,
+  courtId: string | null,
+  time: string | null = null
+): Promise<void> {
+  const { error } = await supabase.rpc('set_match_court', {
+    p_match_id: matchId,
+    p_court_id: courtId,
+    p_time: time,
+  });
+  if (error) fail(error);
+}
+
+export async function adminEnterTeamResult(
+  matchId: string,
+  team1Score: number,
+  team2Score: number
+): Promise<void> {
+  const { error } = await supabase.rpc('enter_team_result', {
+    p_match_id: matchId,
+    p_team1_score: team1Score,
+    p_team2_score: team2Score,
+  });
+  if (error) fail(error);
+}
+
+export async function adminConfirmTeamResult(matchId: string): Promise<void> {
+  const { error } = await supabase.rpc('confirm_team_result', {
+    p_match_id: matchId,
+  });
+  if (error) fail(error);
+}
+
+export async function adminDisputeTeamResult(matchId: string, reason: string): Promise<void> {
+  const { error } = await supabase.rpc('dispute_team_result', {
+    p_match_id: matchId,
+    p_reason: reason,
+  });
+  if (error) fail(error);
 }

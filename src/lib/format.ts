@@ -2,6 +2,36 @@
 
 export const VENUE = 'Spin & Smash Pickle Pavillion, Tagum City';
 
+/**
+ * Doubles tournaments are flagged by a distinct `format` value rather than a
+ * new column, so every row created before this feature keeps working as-is.
+ */
+export const DOUBLES_FORMAT = 'single_elimination_doubles';
+
+export function isDoubles(format?: string | null): boolean {
+  return format === DOUBLES_FORMAT;
+}
+
+/** The option shown in the create form's format dropdown. */
+export const DOUBLES_PICK = 'Doubles · Single Elimination';
+
+/** Dropdown label -> the value stored in `tournaments.format`. */
+export function toDbFormat(pick: string): string {
+  return pick === DOUBLES_PICK ? DOUBLES_FORMAT : pick;
+}
+
+/** "single_elimination_doubles" -> "Doubles · Single Elimination" */
+export function formatLabel(format?: string | null): string {
+  if (isDoubles(format)) return DOUBLES_PICK;
+  return format || 'Single Elimination';
+}
+
+/** "Ana" "Cruz" -> "Ana Cruz"; falls back when the profile is blank. */
+export function playerName(first?: string | null, last?: string | null, fallback = 'TBD'): string {
+  const name = `${first ?? ''} ${last ?? ''}`.trim();
+  return name || fallback;
+}
+
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',

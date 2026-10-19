@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Browser-only preview: background + foreground stacked, with the
+       circular crop Android applies on round launchers. -->
+  <defs>
+    <clipPath id="round">
+      <circle cx="512" cy="512" r="512" />
+    </clipPath>
+  </defs>
+  <g clip-path="url(#round)">
+    <image href="background.svg" xlink:href="background.svg" width="1024" height="1024" />
+    <image href="foreground.svg" xlink:href="foreground.svg" width="1024" height="1024" />
+  </g>
+</svg>

@@ -22,7 +22,7 @@ import { StepProgress } from '../../components/StepProgress';
 import { DbError, createTournament } from '../../lib/db';
 import type { FieldErrors } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
-import { formatDate, formatTime, todayISO } from '../../lib/format';
+import { DOUBLES_PICK, formatDate, formatTime, toDbFormat, todayISO } from '../../lib/format';
 import { SLOT_TIMES, VENUE_NAME } from '../../lib/options';
 import type { Tournament } from '../../lib/types';
 import { glass, palette, type } from '../../theme/glass';
@@ -41,6 +41,9 @@ const FORMATS = [
   'Double Elimination',
   'Round Robin',
   'Double Round Robin',
+  // Doubles: two-player teams with a generated bracket. Stored under a
+  // distinct value so every existing singles tournament keeps its format.
+  DOUBLES_PICK,
 ];
 
 const NAME_MAX = 80;
@@ -150,7 +153,7 @@ export default function CreateTournamentScreen() {
         date,
         time,
         division,
-        format,
+        format: toDbFormat(format),
         slots: Number(slots),
         fee: Number(fee),
         prize: prize.trim(),

@@ -205,7 +205,16 @@ export default function OwnerTournamentsScreen() {
                   <View style={styles.metaRow}>
                     <Meta icon="people" label={`${joined}/${t.slots} joined`} />
                     <Meta icon="pricetag" label={t.fee > 0 ? `₱${t.fee}` : 'Free'} />
-                    <Meta icon="pulse" label={t.status} />
+                    <Meta
+                      icon="pulse"
+                      label={
+                        t.status === 'finished'
+                          ? 'results live'
+                          : t.status === 'ongoing'
+                          ? 'live now'
+                          : 'open for entry'
+                      }
+                    />
                   </View>
 
                   {t.prize ? (
@@ -214,6 +223,23 @@ export default function OwnerTournamentsScreen() {
                       <Text style={styles.prizeText}>{t.prize}</Text>
                     </View>
                   ) : null}
+
+                  <View style={styles.cardActions}>
+                    <View style={{ flex: 1 }}>
+                      <GlassButton
+                        title={t.status === 'finished' ? 'Results' : 'Record results'}
+                        variant={t.status === 'finished' ? 'secondary' : 'primary'}
+                        onPress={() => router.push(`/tournament/manage?id=${t.id}`)}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <GlassButton
+                        title="View"
+                        variant="secondary"
+                        onPress={() => router.push(`/tournament/${t.id}`)}
+                      />
+                    </View>
+                  </View>
                 </GlassCard>
               );
             })
@@ -383,5 +409,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.4)',
     marginBottom: 14,
   },
+  cardActions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   sheetActions: { flexDirection: 'row', gap: 10, marginTop: 18 },
 });

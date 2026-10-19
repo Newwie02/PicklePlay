@@ -39,6 +39,7 @@ export default function TournamentsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [joining, setJoining] = useState<string | null>(null);
+  const [tab, setTab] = useState<'upcoming' | 'results'>('upcoming');
 
   const load = useCallback(async () => {
     try {
@@ -61,6 +62,11 @@ export default function TournamentsScreen() {
   );
 
   const isJoined = (t: Tournament) => !!user && t.participants.includes(user.id);
+
+  /** A finished tournament leaves the open list and moves to Results. */
+  const upcoming = tournaments.filter((t) => t.status !== 'finished');
+  const results = tournaments.filter((t) => t.status === 'finished');
+  const shown = tab === 'upcoming' ? upcoming : results;
 
   const toggleJoin = async (t: Tournament) => {
     if (!user) return;
@@ -109,6 +115,31 @@ export default function TournamentsScreen() {
           <ErrorBanner message={error} />
           <SuccessBanner message={success} />
 
+          {/* Upcoming vs. Results — a finished event's outcome lives in Results. */}
+          <View style={styles.tabs}>
+            {(
+              [
+                { key: 'upcoming', label: `Upcoming (${upcoming.length})`, icon: 'calendar-outline' },
+                { key: 'results', label: `Results (${results.length})`, icon: 'trophy-outline' },
+              ] as const
+            ).map((c) => (
+              <Pressable
+                key={c.key}
+                onPress={() => setTab(c.key)}
+                style={[styles.tab, tab === c.key && styles.tabActive]}
+              >
+                <Ionicons
+                  name={c.icon}
+                  size={14}
+                  color={tab === c.key ? palette.ink : palette.white}
+                />
+                <Text style={[styles.tabText, tab === c.key && styles.tabTextActive]}>
+                  {c.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
           {/* ---------- Announcements ---------- */}
           {announcements.length > 0 ? (
             <View style={{ gap: 12 }}>
@@ -127,23 +158,37 @@ export default function TournamentsScreen() {
           ) : null}
 
           {/* ---------- Open tournaments ---------- */}
-          <SectionHeader title={`Open events (${tournaments.length})`} />
+          <SectionHeader
+            title={
+              tab === 'upcoming'
+                ? `Open events (${shown.length})`
+                : `Finished events (${shown.length})`
+            }
+          />
 
           {loading && tournaments.length === 0 ? (
             <View style={styles.loading}>
               <ActivityIndicator color={palette.lime} size="large" />
               <Text style={type.caption}>Loading tournaments…</Text>
             </View>
-          ) : tournaments.length === 0 ? (
+          ) : shown.length === 0 ? (
             <GlassCard style={{ alignItems: 'center', gap: 8, paddingVertical: 30 }}>
-              <Ionicons name="trophy-outline" size={34} color={palette.faint} />
-              <Text style={type.h3}>No tournaments yet</Text>
+              <Ionicons
+                name={tab === 'upcoming' ? 'trophy-outline' : 'medal-outline'}
+                size={34}
+                color={palette.faint}
+              />
+              <Text style={type.h3}>
+                {tab === 'upcoming' ? 'No tournaments yet' : 'No results yet'}
+              </Text>
               <Text style={[type.caption, { textAlign: 'center' }]}>
-                Check back soon — the court owner posts events here.
+                {tab === 'upcoming'
+                  ? 'Check back soon — the court owner posts events here.'
+                  : 'When a tournament wraps up, the champion and final standings show up here.'}
               </Text>
             </GlassCard>
           ) : (
-            tournaments.map((t) => {
+            shown.map((t) => {
               const joined = isJoined(t);
               const full = (t.joinedCount ?? t.participants.length) >= t.slots;
               return (
@@ -172,14 +217,33 @@ export default function TournamentsScreen() {
                     </View>
                   ) : null}
 
-                  <GlassButton
-                    title={joined ? 'Leave tournament' : full ? 'Tournament full' : 'Join tournament'}
-                    variant={joined ? 'danger' : 'primary'}
-                    disabled={!joined && full}
-                    loading={joining === t.id}
-                    onPress={() => toggleJoin(t)}
-                    style={{ marginTop: 14 }}
-                  />
+                  {t.status === 'finished' ? (
+                    <GlassButton
+                      title="View results"
+                      variant="primary"
+                      onPress={() => router.push(`/tournament/${t.id}`)}
+                      style={{ marginTop: 14 }}
+                    />
+                  ) : (
+                    <GlassButton
+                      title={joined ? 'Leave tournament' : full ? 'Tournament full' : 'Join tournament'}
+                      variant={joined ? 'danger' : 'primary'}
+                      disabled={!joined && full}
+                      loading={joining === t.id}
+                      onPress={() => toggleJoin(t)}
+                      style={{ marginTop: 14 }}
+                    />
+                  )}
+
+                  <Pressable
+                    onPress={() => router.push(`/tournament/${t.id}`)}
+                    style={styles.detailsLink}
+                  >
+                    <Text style={styles.detailsText}>
+                      {t.status === 'finished' ? 'Match-by-match results' : 'Tournament details'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color={palette.lime} />
+                  </Pressable>
                 </GlassCard>
               );
             })
@@ -240,4 +304,21 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   prizeText: { fontSize: 12.5, fontWeight: '600', color: palette.lime, flex: 1 },
+  tabs: { flexDirection: 'row', gap: 8 },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
+  tabActive: { backgroundColor: palette.lime, borderColor: palette.lime },
+  tabText: { color: palette.white, fontSize: 13, fontWeight: '600' },
+  tabTextActive: { color: palette.ink },
+  detailsLink: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 12 },
+  detailsText: { color: palette.lime, fontSize: 13.5, fontWeight: '600' },
 });

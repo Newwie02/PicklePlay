@@ -103,6 +103,83 @@ export type Tournament = {
   createdAt: string;
 };
 
+/** A player, as a bracket row or standings row shows them. */
+export type TournamentPlayer = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatar: string | null;
+  location: string;
+};
+
+/** One fixture. Scores stay null until the owner reports the result. */
+export type TournamentMatch = {
+  id: string;
+  tournamentId: string;
+  round: string;
+  matchNo: number;
+  home: TournamentPlayer | null;
+  away: TournamentPlayer | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: 'scheduled' | 'finished';
+  playedAt: string | null;
+};
+
+/** One row of a tournament's standings, computed from finished matches. */
+export type StandingRow = {
+  tournamentId: string;
+  /** 1 = champion. Ties share a rank, exactly as Postgres `rank()` does. */
+  position: number;
+  player: TournamentPlayer;
+  played: number;
+  wins: number;
+  pointsFor: number;
+  pointsAgainst: number;
+  pointDiff: number;
+};
+
+/* ------------------------------------------------------------------ */
+/* DOUBLES TOURNAMENTS (Phase 3)                                       */
+/* ------------------------------------------------------------------ */
+
+/** Two players entered together. Doubles only — singles stays as it was. */
+export type TournamentTeam = {
+  id: string;
+  tournamentId: string;
+  seed: number | null;
+  player1: TournamentPlayer | null;
+  player2: TournamentPlayer | null;
+};
+
+export type TeamMatchStatus = 'pending' | 'confirmed' | 'disputed';
+
+/** One fixture in a generated bracket. A null team is a slot not filled yet. */
+export type TeamMatch = {
+  id: string;
+  tournamentId: string;
+  roundNo: number;
+  roundLabel: string;
+  matchNo: number;
+  team1: TournamentTeam | null;
+  team2: TournamentTeam | null;
+  winner: TournamentTeam | null;
+  courtId: string | null;
+  scheduledTime: string | null;
+  team1Score: number | null;
+  team2Score: number | null;
+  resultStatus: TeamMatchStatus;
+  /** Set when the winner of this match has somewhere to go. */
+  nextMatchId: string | null;
+  nextSlot: 'team1' | 'team2' | null;
+};
+
+/** One column of the bracket, ready to render left-to-right. */
+export type BracketRound = {
+  label: string;
+  matches: TeamMatch[];
+};
+
 export type Announcement = {
   id: string;
   title: string;

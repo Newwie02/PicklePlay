@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassBackground } from '../components/glass/GlassBackground';
+import { LogoMark } from '../components/LogoMark';
 import { GlassCard } from '../components/glass/GlassCard';
 import { GlassInput } from '../components/glass/GlassInput';
 import { GlassButton } from '../components/glass/GlassButton';
@@ -199,9 +200,7 @@ export default function LoginScreen() {
       <SafeAreaView style={styles.root}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <View style={styles.brandRow}>
-            <View style={styles.brandDot}>
-              <Ionicons name="tennisball" size={18} color={palette.ink} />
-            </View>
+            <LogoMark size={36} />
             <Text style={type.brand}>PicklePlay</Text>
           </View>
 
@@ -340,17 +339,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bgTop },
   container: { padding: 24, gap: 16, flexGrow: 1, justifyContent: 'center' },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  brandDot: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: palette.lime,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: palette.lime,
-    shadowOpacity: 0.6,
-    shadowRadius: 12,
-  },
   roleTabs: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.08)',

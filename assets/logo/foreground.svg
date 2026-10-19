@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="PicklePlay">
+  <title>PicklePlay</title>
+  <defs>
+    <linearGradient id="face" x1="0" y1="0" x2="0.75" y2="1">
+      <stop offset="0" stop-color="#EEFF9C" />
+      <stop offset="0.45" stop-color="#D4F34A" />
+      <stop offset="1" stop-color="#A8D62F" />
+    </linearGradient>
+    <mask id="holes">
+      <circle cx="770" cy="262" r="78" fill="#fff" />
+      <g fill="#000">
+        <circle cx="770" cy="262" r="13" />
+        <circle cx="817" cy="262" r="12" />
+        <circle cx="793.5" cy="302.7" r="12" />
+        <circle cx="746.5" cy="302.7" r="12" />
+        <circle cx="723" cy="262" r="12" />
+        <circle cx="746.5" cy="221.3" r="12" />
+        <circle cx="793.5" cy="221.3" r="12" />
+      </g>
+    </mask>
+  </defs>
+
+  <!-- Scaled to stay inside the Android adaptive-icon safe zone -->
+  <g transform="translate(512 512) scale(0.8) translate(-512 -512)">
+    <g transform="translate(54 14)">
+      <g fill="none" stroke="#5EEAD4" stroke-linecap="round">
+        <path d="M184 684 Q124 580 145 462" stroke-width="20" opacity="0.55" />
+        <path d="M116 677 Q76 589 83 492" stroke-width="15" opacity="0.40" />
+      </g>
+
+      <g transform="rotate(-18 470 520)">
+        <rect x="424" y="585" width="92" height="270" rx="46" fill="#FFFFFF" />
+        <rect x="424" y="700" width="92" height="155" rx="46" fill="#0B3D2A" opacity="0.7" />
+        <rect x="310" y="175" width="320" height="430" rx="78" fill="url(#face)" />
+        <rect x="338" y="210" width="104" height="250" rx="52" fill="#FFFFFF" opacity="0.20" />
+      </g>
+
+      <circle cx="770" cy="262" r="78" fill="#FFFFFF" mask="url(#holes)" />
+    </g>
+  </g>
+</svg>

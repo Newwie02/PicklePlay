@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="PicklePlay">
+  <title>PicklePlay</title>
+  <defs>
+    <mask id="holes">
+      <circle cx="770" cy="262" r="78" fill="#fff" />
+      <g fill="#000">
+        <circle cx="770" cy="262" r="13" />
+        <circle cx="817" cy="262" r="12" />
+        <circle cx="793.5" cy="302.7" r="12" />
+        <circle cx="746.5" cy="302.7" r="12" />
+        <circle cx="723" cy="262" r="12" />
+        <circle cx="746.5" cy="221.3" r="12" />
+        <circle cx="793.5" cy="221.3" r="12" />
+      </g>
+    </mask>
+  </defs>
+
+  <!-- Single-colour silhouette for Android 13+ themed icons -->
+  <g transform="translate(512 512) scale(0.8) translate(-512 -512)">
+    <g transform="translate(54 14)">
+      <g fill="none" stroke="#FFFFFF" stroke-linecap="round">
+        <path d="M184 684 Q124 580 145 462" stroke-width="20" opacity="0.85" />
+        <path d="M116 677 Q76 589 83 492" stroke-width="15" opacity="0.60" />
+      </g>
+
+      <g transform="rotate(-18 470 520)">
+        <!-- Small gap under the face keeps the handle readable as one shape -->
+        <rect x="424" y="625" width="92" height="230" rx="46" fill="#FFFFFF" />
+        <rect x="310" y="175" width="320" height="430" rx="78" fill="#FFFFFF" />
+      </g>
+
+      <circle cx="770" cy="262" r="78" fill="#FFFFFF" mask="url(#holes)" />
+    </g>
+  </g>
+</svg>
